@@ -31,46 +31,44 @@ One lookup replaces any if/elif chain.
 
 1. 每个工具有一个处理函数。路径沙箱防止逃逸工作区。
 
-```python
-def safe_path(p: str) -> Path:
-    path = (WORKDIR / p).resolve()
-    if not path.is_relative_to(WORKDIR):
-        raise ValueError(f"Path escapes workspace: {p}")
-    return path
+```typescript
+function safePath(p: string): string {
+  const resolved = path.resolve(WORKDIR, p);
+  if (!resolved.startsWith(WORKDIR)) throw new Error(`Path escapes workspace: ${p}`);
+  return resolved;
+}
 
-def run_read(path: str, limit: int = None) -> str:
-    text = safe_path(path).read_text()
-    lines = text.splitlines()
-    if limit and limit < len(lines):
-        lines = lines[:limit]
-    return "\n".join(lines)[:50000]
+function runRead(filePath: string, limit?: number): string {
+  const text = fs.readFileSync(safePath(filePath), "utf-8");
+  const lines = text.split("\n");
+  if (limit && limit < lines.length) lines.splice(limit);
+  return lines.join("\n").slice(0, 50000);
+}
 ```
 
 2. dispatch map 将工具名映射到处理函数。
 
-```python
-TOOL_HANDLERS = {
-    "bash":       lambda **kw: run_bash(kw["command"]),
-    "read_file":  lambda **kw: run_read(kw["path"], kw.get("limit")),
-    "write_file": lambda **kw: run_write(kw["path"], kw["content"]),
-    "edit_file":  lambda **kw: run_edit(kw["path"], kw["old_text"],
-                                        kw["new_text"]),
-}
+```typescript
+const TOOL_HANDLERS: Record<string, (kw: ToolInput) => string> = {
+  bash:       (kw) => runBash(kw.command as string),
+  read_file:  (kw) => runRead(kw.path as string, kw.limit as number | undefined),
+  write_file: (kw) => runWrite(kw.path as string, kw.content as string),
+  edit_file:  (kw) => runEdit(kw.path as string, kw.old_text as string, kw.new_text as string),
+};
 ```
 
 3. 循环中按名称查找处理函数。循环体本身与 s01 完全一致。
 
-```python
-for block in response.content:
-    if block.type == "tool_use":
-        handler = TOOL_HANDLERS.get(block.name)
-        output = handler(**block.input) if handler \
-            else f"Unknown tool: {block.name}"
-        results.append({
-            "type": "tool_result",
-            "tool_use_id": block.id,
-            "content": output,
-        })
+```typescript
+for (const block of response.content) {
+  if (block.type === "tool_use") {
+    const handler = TOOL_HANDLERS[block.name];
+    const output = handler
+      ? handler(block.input as ToolInput)
+      : `Unknown tool: ${block.name}`;
+    results.push({ type: "tool_result", tool_use_id: block.id, content: output });
+  }
+}
 ```
 
 加工具 = 加 handler + 加 schema。循环永远不变。
@@ -88,12 +86,12 @@ for block in response.content:
 
 ```sh
 cd learn-claude-code
-python agents/s02_tool_use.py
+npx tsx agents/s02_tool_use.ts
 ```
 
 试试这些 prompt (英文 prompt 对 LLM 效果更好, 也可以用中文):
 
-1. `Read the file requirements.txt`
+1. `Read the file package.json`
 2. `Create a file called greet.py with a greet(name) function`
 3. `Edit greet.py to add a docstring to the function`
 4. `Read greet.py to verify the edit worked`

@@ -42,40 +42,44 @@ Trackers:
 
 1. 领导生成 request_id, 通过收件箱发起关机请求。
 
-```python
-shutdown_requests = {}
+```typescript
+const shutdownRequests: Record<string, { target: string; status: string }> = {};
 
-def handle_shutdown_request(teammate: str) -> str:
-    req_id = str(uuid.uuid4())[:8]
-    shutdown_requests[req_id] = {"target": teammate, "status": "pending"}
-    BUS.send("lead", teammate, "Please shut down gracefully.",
-             "shutdown_request", {"request_id": req_id})
-    return f"Shutdown request {req_id} sent (status: pending)"
+function handleShutdownRequest(teammate: string): string {
+  const reqId = crypto.randomUUID().slice(0, 8);
+  shutdownRequests[reqId] = { target: teammate, status: "pending" };
+  BUS.send("lead", teammate, "Please shut down gracefully.",
+           "shutdown_request", { request_id: reqId });
+  return `Shutdown request ${reqId} sent (status: pending)`;
+}
 ```
 
 2. 队友收到请求后, 用 approve/reject 响应。
 
-```python
-if tool_name == "shutdown_response":
-    req_id = args["request_id"]
-    approve = args["approve"]
-    shutdown_requests[req_id]["status"] = "approved" if approve else "rejected"
-    BUS.send(sender, "lead", args.get("reason", ""),
-             "shutdown_response",
-             {"request_id": req_id, "approve": approve})
+```typescript
+if (toolName === "shutdown_response") {
+  const reqId = args.request_id as string;
+  const approve = args.approve as boolean;
+  shutdownRequests[reqId].status = approve ? "approved" : "rejected";
+  BUS.send(sender, "lead", args.reason as string ?? "",
+           "shutdown_response",
+           { request_id: reqId, approve });
+}
 ```
 
 3. 计划审批遵循完全相同的模式。队友提交计划 (生成 request_id), 领导审查 (引用同一个 request_id)。
 
-```python
-plan_requests = {}
+```typescript
+const planRequests: Record<string, { from: string; plan: string; status: string }> = {};
 
-def handle_plan_review(request_id, approve, feedback=""):
-    req = plan_requests[request_id]
-    req["status"] = "approved" if approve else "rejected"
-    BUS.send("lead", req["from"], feedback,
-             "plan_approval_response",
-             {"request_id": request_id, "approve": approve})
+function handlePlanReview(requestId: string, approve: boolean, feedback = ""): string {
+  const req = planRequests[requestId];
+  req.status = approve ? "approved" : "rejected";
+  BUS.send("lead", req.from, feedback,
+           "plan_approval_response",
+           { request_id: requestId, approve });
+  return `Plan ${requestId} ${req.status}`;
+}
 ```
 
 一个 FSM, 两种用途。同样的 `pending -> approved | rejected` 状态机可以套用到任何请求-响应协议上。
@@ -94,7 +98,7 @@ def handle_plan_review(request_id, approve, feedback=""):
 
 ```sh
 cd learn-claude-code
-python agents/s10_team_protocols.py
+npx tsx agents/s10_team_protocols.ts
 ```
 
 试试这些 prompt (英文 prompt 对 LLM 效果更好, 也可以用中文):

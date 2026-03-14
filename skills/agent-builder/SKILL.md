@@ -109,12 +109,12 @@ The pattern is universal. Only the capabilities change.
 - `references/agent-philosophy.md` - Deep dive into why agents work
 
 **Implementation**:
-- `references/minimal-agent.py` - Complete working agent (~80 lines)
-- `references/tool-templates.py` - Capability definitions
-- `references/subagent-pattern.py` - Context isolation
+- `references/minimal-agent.ts` - Complete working agent (~80 lines)
+- `references/tool-templates.ts` - Capability definitions
+- `references/subagent-pattern.ts` - Context isolation
 
 **Scaffolding**:
-- `scripts/init_agent.py` - Generate new agent projects
+- `scripts/init_agent.ts` - Generate new agent projects
 
 ## The Agent Mindset
 

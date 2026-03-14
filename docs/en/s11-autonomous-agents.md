@@ -47,72 +47,72 @@ Identity re-injection after compression:
 
 1. The teammate loop has two phases: WORK and IDLE. When the LLM stops calling tools (or calls `idle`), the teammate enters IDLE.
 
-```python
-def _loop(self, name, role, prompt):
-    while True:
-        # -- WORK PHASE --
-        messages = [{"role": "user", "content": prompt}]
-        for _ in range(50):
-            response = client.messages.create(...)
-            if response.stop_reason != "tool_use":
-                break
-            # execute tools...
-            if idle_requested:
-                break
+```typescript
+async function teammateLoop(name: string, role: string, prompt: string): Promise<void> {
+  while (true) {
+    // -- WORK PHASE --
+    const messages: Anthropic.MessageParam[] = [{ role: "user", content: prompt }];
+    for (let i = 0; i < 50; i++) {
+      const response = await client.messages.create({ /* ... */ });
+      if (response.stop_reason !== "tool_use") break;
+      // execute tools...
+      if (idleRequested) break;
+    }
 
-        # -- IDLE PHASE --
-        self._set_status(name, "idle")
-        resume = self._idle_poll(name, messages)
-        if not resume:
-            self._set_status(name, "shutdown")
-            return
-        self._set_status(name, "working")
+    // -- IDLE PHASE --
+    setStatus(name, "idle");
+    const resume = await idlePoll(name, messages);
+    if (!resume) { setStatus(name, "shutdown"); return; }
+    setStatus(name, "working");
+  }
+}
 ```
 
 2. The idle phase polls inbox and task board in a loop.
 
-```python
-def _idle_poll(self, name, messages):
-    for _ in range(IDLE_TIMEOUT // POLL_INTERVAL):  # 60s / 5s = 12
-        time.sleep(POLL_INTERVAL)
-        inbox = BUS.read_inbox(name)
-        if inbox:
-            messages.append({"role": "user",
-                "content": f"<inbox>{inbox}</inbox>"})
-            return True
-        unclaimed = scan_unclaimed_tasks()
-        if unclaimed:
-            claim_task(unclaimed[0]["id"], name)
-            messages.append({"role": "user",
-                "content": f"<auto-claimed>Task #{unclaimed[0]['id']}: "
-                           f"{unclaimed[0]['subject']}</auto-claimed>"})
-            return True
-    return False  # timeout -> shutdown
+```typescript
+async function idlePoll(name: string, messages: Anthropic.MessageParam[]): Promise<boolean> {
+  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+  for (let i = 0; i < IDLE_TIMEOUT / POLL_INTERVAL; i++) {  // 60s / 5s = 12
+    await sleep(POLL_INTERVAL);
+    const inbox = BUS.readInbox(name);
+    if (inbox !== "[]") {
+      messages.push({ role: "user", content: `<inbox>${inbox}</inbox>` });
+      return true;
+    }
+    const unclaimed = scanUnclaimedTasks();
+    if (unclaimed.length > 0) {
+      claimTask(unclaimed[0].id, name);
+      messages.push({ role: "user",
+        content: `<auto-claimed>Task #${unclaimed[0].id}: ${unclaimed[0].subject}</auto-claimed>` });
+      return true;
+    }
+  }
+  return false;  // timeout -> shutdown
+}
 ```
 
 3. Task board scanning: find pending, unowned, unblocked tasks.
 
-```python
-def scan_unclaimed_tasks() -> list:
-    unclaimed = []
-    for f in sorted(TASKS_DIR.glob("task_*.json")):
-        task = json.loads(f.read_text())
-        if (task.get("status") == "pending"
-                and not task.get("owner")
-                and not task.get("blockedBy")):
-            unclaimed.append(task)
-    return unclaimed
+```typescript
+function scanUnclaimedTasks(): Array<{ id: number; subject: string }> {
+  return fs.readdirSync(TASKS_DIR)
+    .filter((f) => f.startsWith("task_"))
+    .map((f) => JSON.parse(fs.readFileSync(path.join(TASKS_DIR, f), "utf-8")))
+    .filter((t) => t.status === "pending" && !t.owner && !t.blockedBy?.length)
+    .sort((a, b) => a.id - b.id);
+}
 ```
 
 4. Identity re-injection: when context is too short (compression happened), insert an identity block.
 
-```python
-if len(messages) <= 3:
-    messages.insert(0, {"role": "user",
-        "content": f"<identity>You are '{name}', role: {role}, "
-                   f"team: {team_name}. Continue your work.</identity>"})
-    messages.insert(1, {"role": "assistant",
-        "content": f"I am {name}. Continuing."})
+```typescript
+if (messages.length <= 3) {
+  messages.unshift(
+    { role: "assistant", content: `I am ${name}. Continuing.` },
+    { role: "user", content: `<identity>You are '${name}', role: ${role}, team: ${teamName}. Continue your work.</identity>` }
+  );
+}
 ```
 
 ## What Changed From s10
@@ -130,7 +130,7 @@ if len(messages) <= 3:
 
 ```sh
 cd learn-claude-code
-python agents/s11_autonomous_agents.py
+npx tsx agents/s11_autonomous_agents.ts
 ```
 
 1. `Create 3 tasks on the board, then spawn alice and bob. Watch them auto-claim.`

@@ -52,29 +52,27 @@
 
 ## 核心模式
 
-```python
-def agent_loop(messages):
-    while True:
-        response = client.messages.create(
-            model=MODEL, system=SYSTEM,
-            messages=messages, tools=TOOLS,
-        )
-        messages.append({"role": "assistant",
-                         "content": response.content})
+```typescript
+async function agentLoop(messages: Anthropic.MessageParam[]): Promise<void> {
+  while (true) {
+    const response = await client.messages.create({
+      model: MODEL, system: SYSTEM,
+      messages, tools: TOOLS, max_tokens: 8000,
+    });
+    messages.push({ role: "assistant", content: response.content });
 
-        if response.stop_reason != "tool_use":
-            return
+    if (response.stop_reason !== "tool_use") return;
 
-        results = []
-        for block in response.content:
-            if block.type == "tool_use":
-                output = TOOL_HANDLERS[block.name](**block.input)
-                results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": output,
-                })
-        messages.append({"role": "user", "content": results})
+    const results: Anthropic.ToolResultBlockParam[] = [];
+    for (const block of response.content) {
+      if (block.type === "tool_use") {
+        const output = TOOL_HANDLERS[block.name](block.input as ToolInput);
+        results.push({ type: "tool_result", tool_use_id: block.id, content: output });
+      }
+    }
+    messages.push({ role: "user", content: results });
+  }
+}
 ```
 
 每个课程在这个循环之上叠加一个机制 -- 循环本身始终不变。
@@ -97,12 +95,12 @@ def agent_loop(messages):
 ```sh
 git clone https://github.com/shareAI-lab/learn-claude-code
 cd learn-claude-code
-pip install -r requirements.txt
+npm install
 cp .env.example .env   # 编辑 .env 填入你的 ANTHROPIC_API_KEY
 
-python agents/s01_agent_loop.py       # 从这里开始
-python agents/s12_worktree_task_isolation.py  # 完整递进终点
-python agents/s_full.py               # 总纲: 全部机制合一
+npx tsx agents/s01_agent_loop.ts       # 从这里开始
+npx tsx agents/s12_worktree_task_isolation.ts  # 完整递进终点
+npx tsx agents/s_full.ts               # 总纲: 全部机制合一
 ```
 
 ### Web 平台
@@ -152,7 +150,7 @@ s08  后台任务                [6]     s10  团队协议               [12]
 ```
 learn-claude-code/
 |
-|-- agents/                        # Python 参考实现 (s01-s12 + s_full 总纲)
+|-- agents/                        # TypeScript 参考实现 (s01-s12 + s_full 总纲)
 |-- docs/{en,zh,ja}/               # 心智模型优先的文档 (3 种语言)
 |-- web/                           # 交互式学习平台 (Next.js)
 |-- skills/                        # s05 的 Skill 文件

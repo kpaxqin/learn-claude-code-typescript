@@ -28,45 +28,50 @@ Parent context stays clean. Subagent context is discarded.
 
 1. 親に`task`ツールを追加する。子は`task`を除くすべての基本ツールを取得する(再帰的な生成は不可)。
 
-```python
-PARENT_TOOLS = CHILD_TOOLS + [
-    {"name": "task",
-     "description": "Spawn a subagent with fresh context.",
-     "input_schema": {
-         "type": "object",
-         "properties": {"prompt": {"type": "string"}},
-         "required": ["prompt"],
-     }},
-]
+```typescript
+const PARENT_TOOLS: Anthropic.Tool[] = [
+  ...CHILD_TOOLS,
+  {
+    name: "task",
+    description: "Spawn a subagent with fresh context.",
+    input_schema: {
+      type: "object",
+      properties: { prompt: { type: "string" } },
+      required: ["prompt"],
+    },
+  },
+];
 ```
 
 2. サブエージェントは`messages=[]`で開始し、自身のループを実行する。最終テキストだけが親に返る。
 
-```python
-def run_subagent(prompt: str) -> str:
-    sub_messages = [{"role": "user", "content": prompt}]
-    for _ in range(30):  # safety limit
-        response = client.messages.create(
-            model=MODEL, system=SUBAGENT_SYSTEM,
-            messages=sub_messages,
-            tools=CHILD_TOOLS, max_tokens=8000,
-        )
-        sub_messages.append({"role": "assistant",
-                             "content": response.content})
-        if response.stop_reason != "tool_use":
-            break
-        results = []
-        for block in response.content:
-            if block.type == "tool_use":
-                handler = TOOL_HANDLERS.get(block.name)
-                output = handler(**block.input)
-                results.append({"type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": str(output)[:50000]})
-        sub_messages.append({"role": "user", "content": results})
-    return "".join(
-        b.text for b in response.content if hasattr(b, "text")
-    ) or "(no summary)"
+```typescript
+async function runSubagent(prompt: string): Promise<string> {
+  const subMessages: Anthropic.MessageParam[] = [{ role: "user", content: prompt }];
+  let response!: Anthropic.Message;
+  for (let i = 0; i < 30; i++) {  // safety limit
+    response = await client.messages.create({
+      model: MODEL, system: SUBAGENT_SYSTEM,
+      messages: subMessages,
+      tools: CHILD_TOOLS, max_tokens: 8000,
+    });
+    subMessages.push({ role: "assistant", content: response.content });
+    if (response.stop_reason !== "tool_use") break;
+    const results: Anthropic.ToolResultBlockParam[] = [];
+    for (const block of response.content) {
+      if (block.type === "tool_use") {
+        const handler = TOOL_HANDLERS[block.name];
+        const output = handler ? handler(block.input as ToolInput) : `Unknown tool: ${block.name}`;
+        results.push({ type: "tool_result", tool_use_id: block.id, content: String(output).slice(0, 50000) });
+      }
+    }
+    subMessages.push({ role: "user", content: results });
+  }
+  return response.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("") || "(no summary)";
+}
 ```
 
 子のメッセージ履歴全体(30回以上のツール呼び出し)は破棄される。親は1段落の要約を通常の`tool_result`として受け取る。
@@ -84,9 +89,9 @@ def run_subagent(prompt: str) -> str:
 
 ```sh
 cd learn-claude-code
-python agents/s04_subagent.py
+npx tsx agents/s04_subagent.ts
 ```
 
 1. `Use a subtask to find what testing framework this project uses`
-2. `Delegate: read all .py files and summarize what each one does`
+2. `Delegate: read all .ts files and summarize what each one does`
 3. `Use a task to create a new module, then verify it from here`

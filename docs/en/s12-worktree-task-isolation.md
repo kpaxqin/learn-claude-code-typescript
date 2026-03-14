@@ -36,48 +36,52 @@ State machines:
 
 1. **Create a task.** Persist the goal first.
 
-```python
-TASKS.create("Implement auth refactor")
-# -> .tasks/task_1.json  status=pending  worktree=""
+```typescript
+TASKS.create("Implement auth refactor");
+// -> .tasks/task_1.json  status=pending  worktree=""
 ```
 
 2. **Create a worktree and bind to the task.** Passing `task_id` auto-advances the task to `in_progress`.
 
-```python
-WORKTREES.create("auth-refactor", task_id=1)
-# -> git worktree add -b wt/auth-refactor .worktrees/auth-refactor HEAD
-# -> index.json gets new entry, task_1.json gets worktree="auth-refactor"
+```typescript
+WORKTREES.create("auth-refactor", { taskId: 1 });
+// -> git worktree add -b wt/auth-refactor .worktrees/auth-refactor HEAD
+// -> index.json gets new entry, task_1.json gets worktree="auth-refactor"
 ```
 
 The binding writes state to both sides:
 
-```python
-def bind_worktree(self, task_id, worktree):
-    task = self._load(task_id)
-    task["worktree"] = worktree
-    if task["status"] == "pending":
-        task["status"] = "in_progress"
-    self._save(task)
+```typescript
+bindWorktree(taskId: number, worktree: string): void {
+  const task = this.load(taskId);
+  task.worktree = worktree;
+  if (task.status === "pending") task.status = "in_progress";
+  this.save(task);
+}
 ```
 
 3. **Run commands in the worktree.** `cwd` points to the isolated directory.
 
-```python
-subprocess.run(command, shell=True, cwd=worktree_path,
-               capture_output=True, text=True, timeout=300)
+```typescript
+spawnSync("bash", ["-c", command], {
+  cwd: worktreePath, timeout: 300000, encoding: "utf-8",
+});
 ```
 
 4. **Close out.** Two choices:
    - `worktree_keep(name)` -- preserve the directory for later.
    - `worktree_remove(name, complete_task=True)` -- remove directory, complete the bound task, emit event. One call handles teardown + completion.
 
-```python
-def remove(self, name, force=False, complete_task=False):
-    self._run_git(["worktree", "remove", wt["path"]])
-    if complete_task and wt.get("task_id") is not None:
-        self.tasks.update(wt["task_id"], status="completed")
-        self.tasks.unbind_worktree(wt["task_id"])
-        self.events.emit("task.completed", ...)
+```typescript
+remove(name: string, force = false, completeTask = false): string {
+  this.runGit(["worktree", "remove", wt.path]);
+  if (completeTask && wt.task_id != null) {
+    this.tasks.update(wt.task_id, "completed");
+    this.tasks.unbindWorktree(wt.task_id);
+    this.events.emit("task.completed", { /* ... */ });
+  }
+  return `Removed worktree '${name}'`;
+}
 ```
 
 5. **Event stream.** Every lifecycle step emits to `.worktrees/events.jsonl`:
@@ -109,7 +113,7 @@ After a crash, state reconstructs from `.tasks/` + `.worktrees/index.json` on di
 
 ```sh
 cd learn-claude-code
-python agents/s12_worktree_task_isolation.py
+npx tsx agents/s12_worktree_task_isolation.ts
 ```
 
 1. `Create tasks for backend auth and frontend login page, then list tasks.`

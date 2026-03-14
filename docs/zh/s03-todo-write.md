@@ -34,41 +34,44 @@
 
 1. TodoManager 存储带状态的项目。同一时间只允许一个 `in_progress`。
 
-```python
-class TodoManager:
-    def update(self, items: list) -> str:
-        validated, in_progress_count = [], 0
-        for item in items:
-            status = item.get("status", "pending")
-            if status == "in_progress":
-                in_progress_count += 1
-            validated.append({"id": item["id"], "text": item["text"],
-                              "status": status})
-        if in_progress_count > 1:
-            raise ValueError("Only one task can be in_progress")
-        self.items = validated
-        return self.render()
+```typescript
+class TodoManager {
+  update(items: TodoItem[]): string {
+    const validated: TodoItem[] = [];
+    let inProgressCount = 0;
+    for (const item of items) {
+      const status = item.status ?? "pending";
+      if (status === "in_progress") inProgressCount++;
+      validated.push({ id: item.id, text: item.text, status });
+    }
+    if (inProgressCount > 1) throw new Error("Only one task can be in_progress");
+    this.items = validated;
+    return this.render();
+  }
+}
 ```
 
 2. `todo` 工具和其他工具一样加入 dispatch map。
 
-```python
-TOOL_HANDLERS = {
-    # ...base tools...
-    "todo": lambda **kw: TODO.update(kw["items"]),
-}
+```typescript
+const TOOL_HANDLERS: Record<string, (kw: ToolInput) => string> = {
+  // ...base tools...
+  todo: (kw) => TODO.update(kw.items as TodoItem[]),
+};
 ```
 
 3. nag reminder: 模型连续 3 轮以上不调用 `todo` 时注入提醒。
 
-```python
-if rounds_since_todo >= 3 and messages:
-    last = messages[-1]
-    if last["role"] == "user" and isinstance(last.get("content"), list):
-        last["content"].insert(0, {
-            "type": "text",
-            "text": "<reminder>Update your todos.</reminder>",
-        })
+```typescript
+if (roundsSinceTodo >= 3 && messages.length > 0) {
+  const last = messages[messages.length - 1];
+  if (last.role === "user" && Array.isArray(last.content)) {
+    (last.content as any[]).unshift({
+      type: "text",
+      text: "<reminder>Update your todos.</reminder>",
+    });
+  }
+}
 ```
 
 "同时只能有一个 in_progress" 强制顺序聚焦。nag reminder 制造问责压力 -- 你不更新计划, 系统就追着你问。
@@ -86,7 +89,7 @@ if rounds_since_todo >= 3 and messages:
 
 ```sh
 cd learn-claude-code
-python agents/s03_todo_write.py
+npx tsx agents/s03_todo_write.ts
 ```
 
 试试这些 prompt (英文 prompt 对 LLM 效果更好, 也可以用中文):

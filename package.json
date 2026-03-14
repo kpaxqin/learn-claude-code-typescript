@@ -1,0 +1,30 @@
+{
+  "name": "learn-claude-code",
+  "version": "1.0.0",
+  "description": "AI coding agent examples - TypeScript",
+  "type": "module",
+  "scripts": {
+    "s01": "tsx agents/s01_agent_loop.ts",
+    "s02": "tsx agents/s02_tool_use.ts",
+    "s03": "tsx agents/s03_todo_write.ts",
+    "s04": "tsx agents/s04_subagent.ts",
+    "s05": "tsx agents/s05_skill_loading.ts",
+    "s06": "tsx agents/s06_context_compact.ts",
+    "s07": "tsx agents/s07_task_system.ts",
+    "s08": "tsx agents/s08_background_tasks.ts",
+    "s09": "tsx agents/s09_agent_teams.ts",
+    "s10": "tsx agents/s10_team_protocols.ts",
+    "s11": "tsx agents/s11_autonomous_agents.ts",
+    "s12": "tsx agents/s12_worktree_task_isolation.ts",
+    "full": "tsx agents/s_full.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}

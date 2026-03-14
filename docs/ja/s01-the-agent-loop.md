@@ -27,67 +27,63 @@
 
 1. ユーザーのプロンプトが最初のメッセージになる。
 
-```python
-messages.append({"role": "user", "content": query})
+```typescript
+messages.push({ role: "user", content: query });
 ```
 
 2. メッセージとツール定義をLLMに送信する。
 
-```python
-response = client.messages.create(
-    model=MODEL, system=SYSTEM, messages=messages,
-    tools=TOOLS, max_tokens=8000,
-)
+```typescript
+const response = await client.messages.create({
+  model: MODEL, system: SYSTEM, messages,
+  tools: TOOLS, max_tokens: 8000,
+});
 ```
 
 3. アシスタントのレスポンスを追加し、`stop_reason`を確認する。ツールが呼ばれなければ終了。
 
-```python
-messages.append({"role": "assistant", "content": response.content})
-if response.stop_reason != "tool_use":
-    return
+```typescript
+messages.push({ role: "assistant", content: response.content });
+if (response.stop_reason !== "tool_use") return;
 ```
 
 4. 各ツール呼び出しを実行し、結果を収集してuserメッセージとして追加。ステップ2に戻る。
 
-```python
-results = []
-for block in response.content:
-    if block.type == "tool_use":
-        output = run_bash(block.input["command"])
-        results.append({
-            "type": "tool_result",
-            "tool_use_id": block.id,
-            "content": output,
-        })
-messages.append({"role": "user", "content": results})
+```typescript
+const results: Anthropic.ToolResultBlockParam[] = [];
+for (const block of response.content) {
+  if (block.type === "tool_use") {
+    const output = runBash(block.input.command as string);
+    results.push({ type: "tool_result", tool_use_id: block.id, content: output });
+  }
+}
+messages.push({ role: "user", content: results });
 ```
 
 1つの関数にまとめると:
 
-```python
-def agent_loop(query):
-    messages = [{"role": "user", "content": query}]
-    while True:
-        response = client.messages.create(
-            model=MODEL, system=SYSTEM, messages=messages,
-            tools=TOOLS, max_tokens=8000,
-        )
-        messages.append({"role": "assistant", "content": response.content})
+```typescript
+async function agentLoop(query: string): Promise<void> {
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: query }];
+  while (true) {
+    const response = await client.messages.create({
+      model: MODEL, system: SYSTEM, messages,
+      tools: TOOLS, max_tokens: 8000,
+    });
+    messages.push({ role: "assistant", content: response.content });
 
-        if response.stop_reason != "tool_use":
-            return
+    if (response.stop_reason !== "tool_use") return;
 
-        results = []
-        for block in response.content:
-            if block.type == "tool_use":
-                output = run_bash(block.input["command"])
-                results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": output,
-                })
-        messages.append({"role": "user", "content": results})
+    const results: Anthropic.ToolResultBlockParam[] = [];
+    for (const block of response.content) {
+      if (block.type === "tool_use") {
+        const output = runBash(block.input.command as string);
+        results.push({ type: "tool_result", tool_use_id: block.id, content: output });
+      }
+    }
+    messages.push({ role: "user", content: results });
+  }
+}
 ```
 
 これでエージェント全体が30行未満に収まる。本コースの残りはすべてこのループの上に積み重なる -- ループ自体は変わらない。
@@ -105,7 +101,7 @@ def agent_loop(query):
 
 ```sh
 cd learn-claude-code
-python agents/s01_agent_loop.py
+npx tsx agents/s01_agent_loop.ts
 ```
 
 1. `Create a file called hello.py that prints "Hello, World!"`
