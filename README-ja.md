@@ -52,29 +52,27 @@
 
 ## コアパターン
 
-```python
-def agent_loop(messages):
-    while True:
-        response = client.messages.create(
-            model=MODEL, system=SYSTEM,
-            messages=messages, tools=TOOLS,
-        )
-        messages.append({"role": "assistant",
-                         "content": response.content})
+```typescript
+async function agentLoop(messages: Anthropic.MessageParam[]): Promise<void> {
+  while (true) {
+    const response = await client.messages.create({
+      model: MODEL, system: SYSTEM,
+      messages, tools: TOOLS, max_tokens: 8000,
+    });
+    messages.push({ role: "assistant", content: response.content });
 
-        if response.stop_reason != "tool_use":
-            return
+    if (response.stop_reason !== "tool_use") return;
 
-        results = []
-        for block in response.content:
-            if block.type == "tool_use":
-                output = TOOL_HANDLERS[block.name](**block.input)
-                results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": output,
-                })
-        messages.append({"role": "user", "content": results})
+    const results: Anthropic.ToolResultBlockParam[] = [];
+    for (const block of response.content) {
+      if (block.type === "tool_use") {
+        const output = TOOL_HANDLERS[block.name](block.input as ToolInput);
+        results.push({ type: "tool_result", tool_use_id: block.id, content: output });
+      }
+    }
+    messages.push({ role: "user", content: results });
+  }
+}
 ```
 
 各セッションはこのループの上に1つのメカニズムを重ねる -- ループ自体は変わらない。
@@ -97,12 +95,12 @@ def agent_loop(messages):
 ```sh
 git clone https://github.com/shareAI-lab/learn-claude-code
 cd learn-claude-code
-pip install -r requirements.txt
+npm install
 cp .env.example .env   # .env を編集して ANTHROPIC_API_KEY を入力
 
-python agents/s01_agent_loop.py       # ここから開始
-python agents/s12_worktree_task_isolation.py  # 全セッションの到達点
-python agents/s_full.py               # 総括: 全メカニズム統合
+npx tsx agents/s01_agent_loop.ts       # ここから開始
+npx tsx agents/s12_worktree_task_isolation.ts  # 全セッションの到達点
+npx tsx agents/s_full.ts               # 総括: 全メカニズム統合
 ```
 
 ### Web プラットフォーム
@@ -152,7 +150,7 @@ s08  バックグラウンドタスク   [6]     s10  チームプロトコル  
 ```
 learn-claude-code/
 |
-|-- agents/                        # Python リファレンス実装 (s01-s12 + s_full 総括)
+|-- agents/                        # TypeScript リファレンス実装 (s01-s12 + s_full 総括)
 |-- docs/{en,zh,ja}/               # メンタルモデル優先のドキュメント (3言語)
 |-- web/                           # インタラクティブ学習プラットフォーム (Next.js)
 |-- skills/                        # s05 の Skill ファイル

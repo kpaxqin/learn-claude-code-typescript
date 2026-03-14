@@ -30,58 +30,44 @@ Agent --[spawn A]--[spawn B]--[other work]----
 
 ## 工作原理
 
-1. BackgroundManager 用线程安全的通知队列追踪任务。
+1. BackgroundManager 用通知队列追踪任务。
 
-```python
-class BackgroundManager:
-    def __init__(self):
-        self.tasks = {}
-        self._notification_queue = []
-        self._lock = threading.Lock()
+```typescript
+class BackgroundManager {
+  private tasks: Record<string, { status: string; command: string }> = {};
+  private notificationQueue: Array<{ task_id: string; result: string }> = [];
 ```
 
-2. `run()` 启动守护线程, 立即返回。
+2. `run()` 用 `exec()` 异步执行命令, 立即返回。
 
-```python
-def run(self, command: str) -> str:
-    task_id = str(uuid.uuid4())[:8]
-    self.tasks[task_id] = {"status": "running", "command": command}
-    thread = threading.Thread(
-        target=self._execute, args=(task_id, command), daemon=True)
-    thread.start()
-    return f"Background task {task_id} started"
+```typescript
+run(command: string): string {
+  const taskId = crypto.randomUUID().slice(0, 8);
+  this.tasks[taskId] = { status: "running", command };
+  exec(command, { cwd: WORKDIR, timeout: 300000 }, (error, stdout, stderr) => {
+    const output = ((stdout ?? "") + (stderr ?? "")).trim().slice(0, 50000)
+      || (error ? "Error: Timeout (300s)" : "(no output)");
+    this.notificationQueue.push({ task_id: taskId, result: output.slice(0, 500) });
+  });
+  return `Background task ${taskId} started`;
+}
 ```
 
-3. 子进程完成后, 结果进入通知队列。
-
-```python
-def _execute(self, task_id, command):
-    try:
-        r = subprocess.run(command, shell=True, cwd=WORKDIR,
-            capture_output=True, text=True, timeout=300)
-        output = (r.stdout + r.stderr).strip()[:50000]
-    except subprocess.TimeoutExpired:
-        output = "Error: Timeout (300s)"
-    with self._lock:
-        self._notification_queue.append({
-            "task_id": task_id, "result": output[:500]})
-```
+3. 命令完成后, 结果进入通知队列。
 
 4. 每次 LLM 调用前排空通知队列。
 
-```python
-def agent_loop(messages: list):
-    while True:
-        notifs = BG.drain_notifications()
-        if notifs:
-            notif_text = "\n".join(
-                f"[bg:{n['task_id']}] {n['result']}" for n in notifs)
-            messages.append({"role": "user",
-                "content": f"<background-results>\n{notif_text}\n"
-                           f"</background-results>"})
-            messages.append({"role": "assistant",
-                "content": "Noted background results."})
-        response = client.messages.create(...)
+```typescript
+async function agentLoop(messages: Anthropic.MessageParam[]): Promise<void> {
+  while (true) {
+    const notifs = BG.drainNotifications();
+    if (notifs.length > 0) {
+      const notifText = notifs.map((n) => `[bg:${n.task_id}] ${n.result}`).join("\n");
+      messages.push({ role: "user",
+        content: `<background-results>\n${notifText}\n</background-results>` });
+      messages.push({ role: "assistant", content: "Noted background results." });
+    }
+    const response = await client.messages.create({ /* ... */ });
 ```
 
 循环保持单线程。只有子进程 I/O 被并行化。
@@ -91,19 +77,19 @@ def agent_loop(messages: list):
 | 组件           | 之前 (s07)       | 之后 (s08)                         |
 |----------------|------------------|------------------------------------|
 | Tools          | 8                | 6 (基础 + background_run + check)  |
-| 执行方式       | 仅阻塞           | 阻塞 + 后台线程                    |
+| 执行方式       | 仅阻塞           | 阻塞 + 异步后台执行                |
 | 通知机制       | 无               | 每轮排空的队列                     |
-| 并发           | 无               | 守护线程                           |
+| 并发           | 无               | exec() 异步执行                    |
 
 ## 试一试
 
 ```sh
 cd learn-claude-code
-python agents/s08_background_tasks.py
+npx tsx agents/s08_background_tasks.ts
 ```
 
 试试这些 prompt (英文 prompt 对 LLM 效果更好, 也可以用中文):
 
 1. `Run "sleep 5 && echo done" in the background, then create a file while it runs`
 2. `Start 3 background tasks: "sleep 2", "sleep 4", "sleep 6". Check their status.`
-3. `Run pytest in the background and keep working on other things`
+3. `Run your test suite in the background and keep working on other things`

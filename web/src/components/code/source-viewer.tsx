@@ -1,75 +1,24 @@
 "use client";
 
 import { useMemo } from "react";
+import hljs from "highlight.js/lib/core";
+import typescript from "highlight.js/lib/languages/typescript";
+
+hljs.registerLanguage("typescript", typescript);
 
 interface SourceViewerProps {
   source: string;
   filename: string;
 }
 
-function highlightLine(line: string): React.ReactNode[] {
-  const trimmed = line.trimStart();
-  if (trimmed.startsWith("#")) {
-    return [
-      <span key={0} className="text-zinc-400 italic">
-        {line}
-      </span>,
-    ];
-  }
-  if (trimmed.startsWith("@")) {
-    return [
-      <span key={0} className="text-amber-400">
-        {line}
-      </span>,
-    ];
-  }
-  if (trimmed.startsWith('"""') || trimmed.startsWith("'''")) {
-    return [
-      <span key={0} className="text-emerald-500">
-        {line}
-      </span>,
-    ];
-  }
-
-  const keywordSet = new Set([
-    "def", "class", "import", "from", "return", "if", "elif", "else",
-    "while", "for", "in", "not", "and", "or", "is", "None", "True",
-    "False", "try", "except", "raise", "with", "as", "yield", "break",
-    "continue", "pass", "global", "lambda", "async", "await",
-  ]);
-
-  const parts = line.split(
-    /(\b(?:def|class|import|from|return|if|elif|else|while|for|in|not|and|or|is|None|True|False|try|except|raise|with|as|yield|break|continue|pass|global|lambda|async|await|self)\b|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|f"(?:[^"\\]|\\.)*"|f'(?:[^'\\]|\\.)*'|#.*$|\b\d+(?:\.\d+)?\b)/
-  );
-
-  return parts.map((part, idx) => {
-    if (!part) return null;
-    if (keywordSet.has(part)) {
-      return <span key={idx} className="text-blue-400 font-medium">{part}</span>;
-    }
-    if (part === "self") {
-      return <span key={idx} className="text-purple-400">{part}</span>;
-    }
-    if (part.startsWith("#")) {
-      return <span key={idx} className="text-zinc-400 italic">{part}</span>;
-    }
-    if (
-      (part.startsWith('"') && part.endsWith('"')) ||
-      (part.startsWith("'") && part.endsWith("'")) ||
-      (part.startsWith('f"') && part.endsWith('"')) ||
-      (part.startsWith("f'") && part.endsWith("'"))
-    ) {
-      return <span key={idx} className="text-emerald-500">{part}</span>;
-    }
-    if (/^\d+(?:\.\d+)?$/.test(part)) {
-      return <span key={idx} className="text-orange-400">{part}</span>;
-    }
-    return <span key={idx}>{part}</span>;
-  });
-}
-
 export function SourceViewer({ source, filename }: SourceViewerProps) {
-  const lines = useMemo(() => source.split("\n"), [source]);
+  const { highlighted, lineCount } = useMemo(() => {
+    const result = hljs.highlight(source, { language: "typescript" });
+    return {
+      highlighted: result.value,
+      lineCount: source.split("\n").length,
+    };
+  }, [source]);
 
   return (
     <div className="rounded-lg border border-zinc-200 dark:border-zinc-700">
@@ -82,20 +31,27 @@ export function SourceViewer({ source, filename }: SourceViewerProps) {
         <span className="font-mono text-xs text-zinc-400">{filename}</span>
       </div>
       <div className="overflow-x-auto bg-zinc-950">
-        <pre className="p-2 text-[10px] leading-4 sm:p-4 sm:text-xs sm:leading-5">
-          <code>
-            {lines.map((line, i) => (
-              <div key={i} className="flex">
-                <span className="mr-2 inline-block w-6 shrink-0 select-none text-right text-zinc-600 sm:mr-4 sm:w-8">
-                  {i + 1}
-                </span>
-                <span className="text-zinc-200">
-                  {highlightLine(line)}
-                </span>
-              </div>
-            ))}
-          </code>
-        </pre>
+        <table className="min-w-full border-collapse">
+          <tbody>
+            <tr>
+              <td className="sticky left-0 bg-zinc-950 select-none align-top">
+                <pre className="p-2 pr-3 text-right text-[10px] leading-4 text-zinc-600 sm:p-4 sm:pr-4 sm:text-xs sm:leading-5">
+                  {Array.from({ length: lineCount }, (_, i) => (
+                    <div key={i}>{i + 1}</div>
+                  ))}
+                </pre>
+              </td>
+              <td className="w-full align-top">
+                <pre className="p-2 text-[10px] leading-4 text-zinc-200 sm:p-4 sm:text-xs sm:leading-5">
+                  <code
+                    className="hljs language-typescript"
+                    dangerouslySetInnerHTML={{ __html: highlighted }}
+                  />
+                </pre>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   );

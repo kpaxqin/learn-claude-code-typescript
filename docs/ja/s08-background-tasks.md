@@ -99,7 +99,7 @@ def agent_loop(messages: list):
 
 ```sh
 cd learn-claude-code
-python agents/s08_background_tasks.py
+npx tsx agents/s08_background_tasks.ts
 ```
 
 1. `Run "sleep 5 && echo done" in the background, then create a file while it runs`

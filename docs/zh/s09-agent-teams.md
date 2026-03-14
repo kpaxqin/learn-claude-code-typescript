@@ -37,67 +37,67 @@ Communication:
 
 1. TeammateManager 通过 config.json 维护团队名册。
 
-```python
-class TeammateManager:
-    def __init__(self, team_dir: Path):
-        self.dir = team_dir
-        self.dir.mkdir(exist_ok=True)
-        self.config_path = self.dir / "config.json"
-        self.config = self._load_config()
-        self.threads = {}
+```typescript
+class TeammateManager {
+  private dir: string;
+  private configPath: string;
+  private config: { members: Array<{ name: string; role: string; status: string }> };
+  private workers: Map<string, Worker> = new Map();
 ```
 
-2. `spawn()` 创建队友并在线程中启动 agent loop。
+2. `spawn()` 创建队友并在 Worker 线程中启动 agent loop。
 
-```python
-def spawn(self, name: str, role: str, prompt: str) -> str:
-    member = {"name": name, "role": role, "status": "working"}
-    self.config["members"].append(member)
-    self._save_config()
-    thread = threading.Thread(
-        target=self._teammate_loop,
-        args=(name, role, prompt), daemon=True)
-    thread.start()
-    return f"Spawned teammate '{name}' (role: {role})"
+```typescript
+spawn(name: string, role: string, prompt: string): string {
+  const member = { name, role, status: "working" };
+  this.config.members.push(member);
+  this.saveConfig();
+  const worker = new Worker(__filename, {
+    workerData: { name, role, prompt, workdir: WORKDIR, inboxDir: INBOX_DIR, teamDir: TEAM_DIR }
+  });
+  this.workers.set(name, worker);
+  return `Spawned teammate '${name}' (role: ${role})`;
+}
 ```
 
-3. MessageBus: append-only 的 JSONL 收件箱。`send()` 追加一行; `read_inbox()` 读取全部并清空。
+3. MessageBus: append-only 的 JSONL 收件箱。`send()` 追加一行; `readInbox()` 读取全部并清空。
 
-```python
-class MessageBus:
-    def send(self, sender, to, content, msg_type="message", extra=None):
-        msg = {"type": msg_type, "from": sender,
-               "content": content, "timestamp": time.time()}
-        if extra:
-            msg.update(extra)
-        with open(self.dir / f"{to}.jsonl", "a") as f:
-            f.write(json.dumps(msg) + "\n")
+```typescript
+class MessageBus {
+  send(sender: string, to: string, content: string, msgType = "message", extra: Record<string, unknown> = {}): void {
+    const msg = { type: msgType, from: sender, content, timestamp: Date.now(), ...extra };
+    fs.appendFileSync(path.join(this.dir, `${to}.jsonl`), JSON.stringify(msg) + "\n", "utf-8");
+  }
 
-    def read_inbox(self, name):
-        path = self.dir / f"{name}.jsonl"
-        if not path.exists(): return "[]"
-        msgs = [json.loads(l) for l in path.read_text().strip().splitlines() if l]
-        path.write_text("")  # drain
-        return json.dumps(msgs, indent=2)
+  readInbox(name: string): string {
+    const filePath = path.join(this.dir, `${name}.jsonl`);
+    if (!fs.existsSync(filePath)) return "[]";
+    const msgs = fs.readFileSync(filePath, "utf-8").trim().split("\n")
+      .filter(Boolean).map((l) => JSON.parse(l));
+    fs.writeFileSync(filePath, "", "utf-8");  // drain
+    return JSON.stringify(msgs, null, 2);
+  }
+}
 ```
 
 4. 每个队友在每次 LLM 调用前检查收件箱, 将消息注入上下文。
 
-```python
-def _teammate_loop(self, name, role, prompt):
-    messages = [{"role": "user", "content": prompt}]
-    for _ in range(50):
-        inbox = BUS.read_inbox(name)
-        if inbox != "[]":
-            messages.append({"role": "user",
-                "content": f"<inbox>{inbox}</inbox>"})
-            messages.append({"role": "assistant",
-                "content": "Noted inbox messages."})
-        response = client.messages.create(...)
-        if response.stop_reason != "tool_use":
-            break
-        # execute tools, append results...
-    self._find_member(name)["status"] = "idle"
+```typescript
+// In worker thread:
+async function teammateLoop(name: string, role: string, prompt: string): Promise<void> {
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: prompt }];
+  for (let i = 0; i < 50; i++) {
+    const inbox = BUS.readInbox(name);
+    if (inbox !== "[]") {
+      messages.push({ role: "user", content: `<inbox>${inbox}</inbox>` });
+      messages.push({ role: "assistant", content: "Noted inbox messages." });
+    }
+    const response = await client.messages.create({ /* ... */ });
+    if (response.stop_reason !== "tool_use") break;
+    // execute tools, append results...
+  }
+  TEAM.setStatus(name, "idle");
+}
 ```
 
 ## 相对 s08 的变更
@@ -107,7 +107,7 @@ def _teammate_loop(self, name, role, prompt):
 | Tools          | 6                | 9 (+spawn/send/read_inbox)         |
 | 智能体数量     | 单一             | 领导 + N 个队友                    |
 | 持久化         | 无               | config.json + JSONL 收件箱         |
-| 线程           | 后台命令         | 每线程完整 agent loop              |
+| 线程           | 后台命令         | 每 Worker 线程完整 agent loop      |
 | 生命周期       | 一次性           | idle -> working -> idle            |
 | 通信           | 无               | message + broadcast                |
 
@@ -115,7 +115,7 @@ def _teammate_loop(self, name, role, prompt):
 
 ```sh
 cd learn-claude-code
-python agents/s09_agent_teams.py
+npx tsx agents/s09_agent_teams.ts
 ```
 
 试试这些 prompt (英文 prompt 对 LLM 效果更好, 也可以用中文):

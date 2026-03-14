@@ -97,7 +97,7 @@ TOOL_HANDLERS = {
 
 ```sh
 cd learn-claude-code
-python agents/s05_skill_loading.py
+npx tsx agents/s05_skill_loading.ts
 ```
 
 1. `What skills are available?`

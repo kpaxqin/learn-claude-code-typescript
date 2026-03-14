@@ -51,29 +51,27 @@
 
 ## The Core Pattern
 
-```python
-def agent_loop(messages):
-    while True:
-        response = client.messages.create(
-            model=MODEL, system=SYSTEM,
-            messages=messages, tools=TOOLS,
-        )
-        messages.append({"role": "assistant",
-                         "content": response.content})
+```typescript
+async function agentLoop(messages: Anthropic.MessageParam[]): Promise<void> {
+  while (true) {
+    const response = await client.messages.create({
+      model: MODEL, system: SYSTEM,
+      messages, tools: TOOLS, max_tokens: 8000,
+    });
+    messages.push({ role: "assistant", content: response.content });
 
-        if response.stop_reason != "tool_use":
-            return
+    if (response.stop_reason !== "tool_use") return;
 
-        results = []
-        for block in response.content:
-            if block.type == "tool_use":
-                output = TOOL_HANDLERS[block.name](**block.input)
-                results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": output,
-                })
-        messages.append({"role": "user", "content": results})
+    const results: Anthropic.ToolResultBlockParam[] = [];
+    for (const block of response.content) {
+      if (block.type === "tool_use") {
+        const output = TOOL_HANDLERS[block.name](block.input as ToolInput);
+        results.push({ type: "tool_result", tool_use_id: block.id, content: output });
+      }
+    }
+    messages.push({ role: "user", content: results });
+  }
+}
 ```
 
 Every session layers one mechanism on top of this loop -- without changing the loop itself.
@@ -96,12 +94,12 @@ Treat the team JSONL mailbox protocol in this repo as a teaching implementation,
 ```sh
 git clone https://github.com/shareAI-lab/learn-claude-code
 cd learn-claude-code
-pip install -r requirements.txt
+npm install
 cp .env.example .env   # Edit .env with your ANTHROPIC_API_KEY
 
-python agents/s01_agent_loop.py       # Start here
-python agents/s12_worktree_task_isolation.py  # Full progression endpoint
-python agents/s_full.py               # Capstone: all mechanisms combined
+npx tsx agents/s01_agent_loop.ts       # Start here
+npx tsx agents/s12_worktree_task_isolation.ts  # Full progression endpoint
+npx tsx agents/s_full.ts               # Capstone: all mechanisms combined
 ```
 
 ### Web Platform
@@ -151,7 +149,7 @@ s08  Background Tasks        [6]     s10  Team Protocols          [12]
 ```
 learn-claude-code/
 |
-|-- agents/                        # Python reference implementations (s01-s12 + s_full capstone)
+|-- agents/                        # TypeScript reference implementations (s01-s12 + s_full capstone)
 |-- docs/{en,zh,ja}/               # Mental-model-first documentation (3 languages)
 |-- web/                           # Interactive learning platform (Next.js)
 |-- skills/                        # Skill files for s05

@@ -94,7 +94,7 @@ def handle_plan_review(request_id, approve, feedback=""):
 
 ```sh
 cd learn-claude-code
-python agents/s10_team_protocols.py
+npx tsx agents/s10_team_protocols.ts
 ```
 
 1. `Spawn alice as a coder. Then request her shutdown.`

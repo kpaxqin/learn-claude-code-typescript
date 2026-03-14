@@ -109,7 +109,7 @@ def remove(self, name, force=False, complete_task=False):
 
 ```sh
 cd learn-claude-code
-python agents/s12_worktree_task_isolation.py
+npx tsx agents/s12_worktree_task_isolation.ts
 ```
 
 1. `Create tasks for backend auth and frontend login page, then list tasks.`
