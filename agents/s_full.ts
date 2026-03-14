@@ -243,8 +243,8 @@ function microcompact(messages: Anthropic.MessageParam[]): void {
   for (const msg of messages) {
     if (msg.role === "user" && Array.isArray(msg.content)) {
       for (const part of msg.content) {
-        if (typeof part === "object" && part !== null && (part as Record<string, unknown>).type === "tool_result")
-          indices.push(part as Record<string, unknown>);
+        if (typeof part === "object" && part !== null && (part as unknown as Record<string, unknown>).type === "tool_result")
+          indices.push(part as unknown as Record<string, unknown>);
       }
     }
   }
